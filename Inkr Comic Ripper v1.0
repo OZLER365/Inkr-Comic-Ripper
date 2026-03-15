@@ -1,0 +1,140 @@
+// ==UserScript==
+// @name         Inkr Comic Ripper
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Downloads chapter images from comics.inkr.com individually into a folder named after the tab.
+// @author       ozler365
+// @license      GPL-3.0-only
+// @icon         https://is1-ssl.mzstatic.com/image/thumb/Purple116/v4/23/52/3f/23523f4d-7878-8c58-44da-953647a1bc2c/AppIcon-1x_U007emarketing-0-7-0-85-220.png/400x400ia-75.webp
+// @match        https://comics.inkr.com/title/*/chapter/*
+// @grant        GM_download
+// @grant        GM_addStyle
+// @downloadURL https://update.greasyfork.org/scripts/569825/Inkr%20Comic%20Ripper.user.js
+// @updateURL https://update.greasyfork.org/scripts/569825/Inkr%20Comic%20Ripper.meta.js
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    let imageUrls = [];
+
+    // --- 1. Network Observer ---
+    const resourceObserver = new PerformanceObserver((list) => {
+        const entries = list.getEntries();
+        for (const entry of entries) {
+            const url = entry.name;
+            try {
+                const parsedUrl = new URL(url);
+                if (parsedUrl.pathname.endsWith('p.jpg') || parsedUrl.pathname.endsWith('/p.jpg')) {
+                    if (!imageUrls.includes(url)) {
+                        imageUrls.push(url);
+                        updateUI();
+                    }
+                }
+            } catch (e) {
+                // Ignore malformed URLs
+            }
+        }
+    });
+
+    resourceObserver.observe({ type: 'resource', buffered: true });
+
+    // --- 2. Build the UI ---
+    GM_addStyle(`
+        #inkr-dl-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 999999;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            font-family: sans-serif;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+        }
+        #inkr-dl-btn {
+            background: #0984e3;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        #inkr-dl-btn:hover { background: #74b9ff; }
+        #inkr-dl-btn:disabled { background: #747d8c; cursor: not-allowed; }
+        #inkr-dl-text { font-size: 12px; margin: 0; }
+    `);
+
+    const container = document.createElement('div');
+    container.id = 'inkr-dl-container';
+
+    const infoText = document.createElement('p');
+    infoText.id = 'inkr-dl-text';
+    infoText.innerText = 'Scroll to load pages...';
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.id = 'inkr-dl-btn';
+    downloadBtn.innerText = 'Download (0)';
+    downloadBtn.addEventListener('click', downloadImages);
+
+    container.appendChild(infoText);
+    container.appendChild(downloadBtn);
+    document.body.appendChild(container);
+
+    function updateUI() {
+        downloadBtn.innerText = `Download (${imageUrls.length})`;
+        infoText.innerText = `Found ${imageUrls.length} pages`;
+    }
+
+    // --- 3. Downloading Logic ---
+    async function downloadImages() {
+        if (imageUrls.length === 0) {
+            alert("No images found yet. Make sure you scroll through the chapter first!");
+            return;
+        }
+
+        downloadBtn.disabled = true;
+
+        // Get tab title and sanitize it to create a safe Windows/Mac folder name
+        let rawTitle = document.title || "Inkr_Chapter";
+        // Remove illegal characters: \ / : * ? " < > |
+        const safeFolderName = rawTitle.replace(/[\\\/\:\*\?\"\<\>\|]/g, '').trim();
+
+        for (let i = 0; i < imageUrls.length; i++) {
+            downloadBtn.innerText = `Downloading ${i + 1}/${imageUrls.length}...`;
+
+            const url = imageUrls[i];
+            const fileName = `page_${String(i + 1).padStart(3, '0')}.jpg`;
+            // GM_download allows saving to a sub-directory inside your default Downloads folder
+            const savePath = `${safeFolderName}/${fileName}`;
+
+            // Await each download to prevent overwhelming the browser
+            await new Promise((resolve) => {
+                GM_download({
+                    url: url,
+                    name: savePath,
+                    onload: () => resolve(),
+                    onerror: (err) => {
+                        console.error(`Failed to download ${savePath}`, err);
+                        resolve(); // Resolve anyway so the loop continues to the next image
+                    },
+                    ontimeout: () => resolve()
+                });
+            });
+
+            // Add a tiny 200ms delay between downloads so the browser doesn't throttle us
+            await new Promise(r => setTimeout(r, 200));
+        }
+
+        downloadBtn.innerText = `Download (${imageUrls.length})`;
+        downloadBtn.disabled = false;
+        alert(`Done! Check your Downloads folder for the "${safeFolderName}" folder.`);
+    }
+})();
