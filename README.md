@@ -1,5 +1,5 @@
 # Inkr-Comic-Ripper
-Add this userscript to Tampermonkey (recommended), Violet Monkey extension Mobile and Desktop both supported 
+Visit My Website - https://ozler365.github.io/ozler-s-works-info/#/repositories
 
 Help Keep This Userscript
 Updated and Running Smoothly
@@ -10,5 +10,7 @@ Review on Greasyfork or Email:
 devjk6918@gmail.com
 
 *This is for educational purpose, don't repost the downloaded images
+
 zip is not supported but individual images will be downloading them in a separate folder
+
 Tamper Monkey recommended
